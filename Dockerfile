@@ -1,39 +1,40 @@
-# Gunakan Python 3.11 versi ringan (Linux Debian)
-FROM python:3.11-slim
+# 1. Gunakan Base Image RESMI Zyte (Agar tidak error 127 / list-spiders missing)
+FROM scrapinghub/scrapinghub-stack-scrapy:2.11
 
-# --- BAGIAN 1: KONFIGURASI ENVIRONMENT ---
-ENV PYTHONUNBUFFERED=1 \
+# 2. Switch ke ROOT user
+# Secara default image Zyte pakai user 'nobody', kita perlu root untuk install browser
+USER root
+
+# 3. Setup Environment Variables
+ENV TERM=xterm \
+    PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    # Penting: Agar Python bisa import codingan Anda dari folder /app
-    PYTHONPATH="/app" \
-    # Lokasi khusus untuk menyimpan browser Playwright
+    # Set folder khusus browser agar tidak permission error
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# --- BAGIAN 2: INSTALL DEPENDENCY LINUX ---
-# Playwright butuh library-library ini agar Chrome bisa jalan di server
+# 4. Install Dependency System (apt-get)
+# Kita butuh ini agar command 'playwright install' nanti berhasil
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    libgbm-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# --- BAGIAN 3: SETUP PROJECT ---
-WORKDIR /app
-
-# Copy requirements dulu agar caching Docker efisien
+# 5. Copy requirements & Install Python Libs
 COPY requirements.txt /app/requirements.txt
+WORKDIR /app
+RUN pip install --no-cache-dir -r requirements.txt
 
-# --- BAGIAN 4: INSTALL PYTHON LIBS & BROWSER ---
-# Install library Python TERMASUK 'scrapinghub-entrypoint-scrapy'
-RUN pip install -r requirements.txt
-
-# Install Browser Chromium dan dependency-nya
-RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
+# 6. Install Playwright Browsers
+# --with-deps akan otomatis download library Linux pendukung browser
+RUN pip install scrapy-playwright \
+    && mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
     && playwright install chromium --with-deps \
     && chmod -R 777 $PLAYWRIGHT_BROWSERS_PATH
 
-# --- BAGIAN 5: COPY KODE & FINALISASI ---
+# 7. Copy Project Code
 COPY . /app
+RUN python setup.py install || true
 
-# Test run untuk memastikan Spider terdeteksi saat build
-# Kalau perintah ini error, deploy pasti gagal. Kalau sukses, deploy aman.
-RUN scrapy list
+# PENTING: Jangan ubah ENTRYPOINT. 
+# Biarkan Zyte menggunakan entrypoint bawaan image scrapinghub-stack.
