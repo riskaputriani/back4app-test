@@ -1,44 +1,59 @@
-# 1. GANTI versi 2.11 menjadi 2.13
-# Versi 2.13 menggunakan Debian yang lebih baru, jadi apt-get tidak akan error 404
-FROM scrapinghub/scrapinghub-stack-scrapy:2.13
+FROM scrapinghub/scrapinghub-stack-scrapy:2.1
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get install zip unzip
 
-# 2. Masuk sebagai ROOT untuk instalasi sistem
-USER root
+#============================================
+# Google Chrome
+#============================================
+# can specify versions by CHROME_VERSION;
+#  e.g. google-chrome-stable=53.0.2785.101-1
+#       google-chrome-beta=53.0.2785.92-1
+#       google-chrome-unstable=54.0.2840.14-1
+#       latest (equivalent to google-chrome-stable)
+#       google-chrome-beta  (pull latest beta)
+#============================================
+ARG CHROME_VERSION="google-chrome-stable"
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+  && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+  && apt-get update -qqy \
+  && apt-get -qqy install \
+    ${CHROME_VERSION:-google-chrome-stable} \
+  && rm /etc/apt/sources.list.d/google-chrome.list \
+  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
 
-# 3. Environment Variables
-ENV TERM=xterm \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# 4. Install Dependency Linux (Sekarang pasti berhasil)
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    libgbm-dev \
-    # libnss3 dll sering dibutuhkan Chromium
-    libnss3 \
-    libxss1 \
-    libasound2 \
-    && rm -rf /var/lib/apt/lists/*
+#============================================
+# Chrome Webdriver
+#============================================
+# can specify versions by CHROME_DRIVER_VERSION
+# Latest released version will be used by default
+#============================================
+ARG CHROME_DRIVER_VERSION
+RUN CHROME_STRING=$(google-chrome --version) \
+  && CHROME_VERSION_STRING=$(echo "${CHROME_STRING}" | grep -oP "\d+\.\d+\.\d+\.\d+") \
+  && CHROME_MAYOR_VERSION=$(echo "${CHROME_VERSION_STRING%%.*}") \
+  && wget --no-verbose -O /tmp/LATEST_RELEASE "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAYOR_VERSION}" \
+  && CD_VERSION=$(cat "/tmp/LATEST_RELEASE") \
+  && rm /tmp/LATEST_RELEASE \
+  && if [ -z "$CHROME_DRIVER_VERSION" ]; \
+     then CHROME_DRIVER_VERSION="${CD_VERSION}"; \
+     fi \
+  && CD_VERSION=$(echo $CHROME_DRIVER_VERSION) \
+  && echo "Using chromedriver version: "$CD_VERSION \
+  && wget --no-verbose -O /tmp/chromedriver_linux64.zip https://chromedriver.storage.googleapis.com/$CD_VERSION/chromedriver_linux64.zip \
+  && rm -rf /opt/selenium/chromedriver \
+  && unzip /tmp/chromedriver_linux64.zip -d /opt/selenium \
+  && rm /tmp/chromedriver_linux64.zip \
+  && mv /opt/selenium/chromedriver /opt/selenium/chromedriver-$CD_VERSION \
+  && chmod 755 /opt/selenium/chromedriver-$CD_VERSION \
+  && sudo ln -fs /opt/selenium/chromedriver-$CD_VERSION /usr/bin/chromedriver
 
-# 5. Setup Folder Project
+ENV TERM xterm
+ENV SCRAPY_SETTINGS_MODULE cVehicles.settings
+RUN mkdir -p /app
 WORKDIR /app
-COPY requirements.txt /app/requirements.txt
-
-# 6. Install Python Libs & Playwright
-# Kita install scrapy-playwright. 
-# scrapinghub-entrypoint-scrapy sudah bawaan image 2.13, tapi update saja biar aman.
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install scrapy-playwright
-
-# 7. Install Browser Chromium
-RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
-    && playwright install chromium --with-deps \
-    && chmod -R 777 $PLAYWRIGHT_BROWSERS_PATH
-
-# 8. Copy Project Code
+COPY ./requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
-RUN python setup.py install || true
-
-# Entrypoint biarkan default dari Zyte
+RUN python setup.py install

@@ -1,4 +1,3 @@
-project: 839057 # Sesuaikan dengan ID project Anda (saya ambil dari log di atas)
+project: 839057
+requirements_file: ./requirements.txt
 image: true
-# stacks:
-#   default: scrapy:2.13-20250721
