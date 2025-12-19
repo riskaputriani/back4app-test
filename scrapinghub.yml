@@ -1,3 +1,2 @@
-project: 839057 # Ganti dengan Project ID Zyte Anda
-requirements:
-  file: requirements.txt
+stacks:
+  default: scrapy:2.13-20250721
