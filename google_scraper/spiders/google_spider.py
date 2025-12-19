@@ -8,6 +8,10 @@ class GoogleSpider(scrapy.Spider):
     allowed_domains = ["google.com"]
     start_urls = ["https://www.google.com/"]
 
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(url, meta={"playwright": True})
+
     def parse(self, response):
         title = response.css("title::text").get()
         item = GoogleTitleItem()
