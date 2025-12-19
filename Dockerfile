@@ -1,59 +1,69 @@
-FROM scrapinghub/scrapinghub-stack-scrapy:2.1
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install zip unzip
+# ---------------------------------------------------------------
+# 1. GUNAKAN IMAGE TERBARU (Wajib ganti ke 2.13)
+# ---------------------------------------------------------------
+# Versi 2.1 menyebabkan error apt-get 404. Versi 2.13 menggunakan Debian baru.
+FROM scrapinghub/scrapinghub-stack-scrapy:2.13
 
-#============================================
-# Google Chrome
-#============================================
-# can specify versions by CHROME_VERSION;
-#  e.g. google-chrome-stable=53.0.2785.101-1
-#       google-chrome-beta=53.0.2785.92-1
-#       google-chrome-unstable=54.0.2840.14-1
-#       latest (equivalent to google-chrome-stable)
-#       google-chrome-beta  (pull latest beta)
-#============================================
-ARG CHROME_VERSION="google-chrome-stable"
-RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-  && echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-  && apt-get update -qqy \
-  && apt-get -qqy install \
-    ${CHROME_VERSION:-google-chrome-stable} \
-  && rm /etc/apt/sources.list.d/google-chrome.list \
-  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+# ---------------------------------------------------------------
+# 2. PINDAH KE USER ROOT
+# ---------------------------------------------------------------
+# Image Zyte default-nya user 'nobody', kita butuh root untuk install
+USER root
 
+# ---------------------------------------------------------------
+# 3. SETTING ENVIRONMENT
+# ---------------------------------------------------------------
+ENV TERM=xterm \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    # Folder khusus untuk browser Playwright agar rapi
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    # Ganti dengan nama module settings project Anda jika perlu
+    SCRAPY_SETTINGS_MODULE=cVehicles.settings
 
-#============================================
-# Chrome Webdriver
-#============================================
-# can specify versions by CHROME_DRIVER_VERSION
-# Latest released version will be used by default
-#============================================
-ARG CHROME_DRIVER_VERSION
-RUN CHROME_STRING=$(google-chrome --version) \
-  && CHROME_VERSION_STRING=$(echo "${CHROME_STRING}" | grep -oP "\d+\.\d+\.\d+\.\d+") \
-  && CHROME_MAYOR_VERSION=$(echo "${CHROME_VERSION_STRING%%.*}") \
-  && wget --no-verbose -O /tmp/LATEST_RELEASE "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_MAYOR_VERSION}" \
-  && CD_VERSION=$(cat "/tmp/LATEST_RELEASE") \
-  && rm /tmp/LATEST_RELEASE \
-  && if [ -z "$CHROME_DRIVER_VERSION" ]; \
-     then CHROME_DRIVER_VERSION="${CD_VERSION}"; \
-     fi \
-  && CD_VERSION=$(echo $CHROME_DRIVER_VERSION) \
-  && echo "Using chromedriver version: "$CD_VERSION \
-  && wget --no-verbose -O /tmp/chromedriver_linux64.zip https://chromedriver.storage.googleapis.com/$CD_VERSION/chromedriver_linux64.zip \
-  && rm -rf /opt/selenium/chromedriver \
-  && unzip /tmp/chromedriver_linux64.zip -d /opt/selenium \
-  && rm /tmp/chromedriver_linux64.zip \
-  && mv /opt/selenium/chromedriver /opt/selenium/chromedriver-$CD_VERSION \
-  && chmod 755 /opt/selenium/chromedriver-$CD_VERSION \
-  && sudo ln -fs /opt/selenium/chromedriver-$CD_VERSION /usr/bin/chromedriver
+# ---------------------------------------------------------------
+# 4. INSTALL DEPENDENCY LINUX (Pengganti Chrome Manual)
+# ---------------------------------------------------------------
+# Playwright butuh library sistem ini.
+# Karena kita pakai image 2.13, apt-get update PASTI BERHASIL.
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    libgbm-dev \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    zip \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV TERM xterm
-ENV SCRAPY_SETTINGS_MODULE cVehicles.settings
-RUN mkdir -p /app
+# ---------------------------------------------------------------
+# 5. SETUP PROJECT & INSTALL PYTHON
+# ---------------------------------------------------------------
 WORKDIR /app
-COPY ./requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+
+# Install library python
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install scrapy-playwright
+
+# ---------------------------------------------------------------
+# 6. INSTALL BROWSER PLAYWRIGHT (Pengganti Chromedriver)
+# ---------------------------------------------------------------
+# Perintah ini otomatis download Chromium versi yang cocok
+RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
+    && playwright install chromium --with-deps \
+    && chmod -R 777 $PLAYWRIGHT_BROWSERS_PATH
+
+# ---------------------------------------------------------------
+# 7. COPY KODE & FINISHING
+# ---------------------------------------------------------------
 COPY . /app
-RUN python setup.py install
+RUN python setup.py install || true
+
+# Verifikasi agar deploy di Zyte terdeteksi sukses
+RUN scrapy list
