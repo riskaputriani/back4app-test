@@ -14,6 +14,3 @@ RUN pip install -r /app/requirements.txt \
 
 COPY . /app
 RUN pip install -e .
-
-# debug (boleh hapus setelah beres)
-RUN scrapy list
