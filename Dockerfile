@@ -16,4 +16,4 @@ COPY . /app
 RUN pip install -e .
 
 # debug (boleh hapus setelah beres)
-RUN scrapy list && shub-image-info --debug
+RUN scrapy list
