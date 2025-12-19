@@ -1,23 +1,33 @@
 import scrapy
-from selenium import webdriver
+from scrapy_playwright.page import PageMethod
 
 
 class DemoSpider(scrapy.Spider):
-    name = 'demo'
-    start_urls = ['http://quotes.toscrape.com/js']
+    name = "demo"
+    start_urls = ["http://quotes.toscrape.com/js"]
 
-    def __init__(self, *args, **kwargs):
-        # XXX: needs phantomjs binary available in PATH
-        self.driver = webdriver.PhantomJS()
-        super(DemoSpider, self).__init__(*args, **kwargs)
+    def start_requests(self):
+        for url in self.start_urls:
+            yield scrapy.Request(
+                url,
+                meta={
+                    "playwright": True,
+                    "playwright_page_methods": [PageMethod("wait_for_selector", "div.quote")],
+                },
+            )
 
     def parse(self, response):
-        self.driver.get(response.url)
-        for quote in self.driver.find_elements_by_css_selector('div.quote'):
+        for quote in response.css("div.quote"):
             yield {
-                'quote': quote.find_element_by_css_selector('span').text,
-                'author': quote.find_element_by_css_selector('small').text,
+                "quote": quote.css("span.text::text").get(),
+                "author": quote.css("small.author::text").get(),
             }
-        next_page_url = response.css('nav li.next a ::attr(href)').extract_first()
+        next_page_url = response.css("nav li.next a::attr(href)").get()
         if next_page_url:
-            yield scrapy.Request(response.urljoin(next_page_url))
+            yield scrapy.Request(
+                response.urljoin(next_page_url),
+                meta={
+                    "playwright": True,
+                    "playwright_page_methods": [PageMethod("wait_for_selector", "div.quote")],
+                },
+            )
