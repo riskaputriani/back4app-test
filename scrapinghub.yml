@@ -1,0 +1,3 @@
+project: 839057 # Ganti dengan Project ID Zyte Anda
+requirements:
+  file: requirements.txt
