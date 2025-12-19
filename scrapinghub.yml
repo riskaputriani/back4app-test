@@ -1,2 +1,4 @@
+project: 839057 # Sesuaikan dengan ID project Anda (saya ambil dari log di atas)
+image: true
 stacks:
   default: scrapy:2.13-20250721
