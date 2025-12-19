@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PLAYWRIGHT_BROWSERS_PATH=/scrapinghub/.cache/ms-playwright \
-    SCRAPY_SETTINGS_MODULE=google_scraper.settings
+    SCRAPY_SETTINGS_MODULE=sc_custom_image.settings
 
 WORKDIR /app
 
